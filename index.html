@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
 <meta charset="utf-8">
-<title>DuckFlix VR v4.1</title>
+<title>DuckFlix VR v5</title>
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 
 <style>
@@ -34,121 +34,166 @@ button:disabled{background:#333}
 
 <video id="video" playsinline crossorigin="anonymous"></video>
 
-<!-- ===== CENA VR ===== -->
 <a-scene>
 
-  <!-- CAMERA + GAZE PROFISSIONAL -->
-  <a-entity position="0 1.6 0">
-    <a-camera>
-      <a-cursor
-        fuse="true"
-        fuse-timeout="1200"
-        geometry="primitive:ring; radiusInner:0.015; radiusOuter:0.03"
-        material="color:yellow; shader:flat; opacity:0.9">
-      </a-cursor>
-    </a-camera>
-  </a-entity>
+<!-- CAMERA + GAZE -->
+<a-entity position="0 1.6 0">
+  <a-camera>
+    <a-cursor fuse="true" fuse-timeout="1200"
+      geometry="primitive:ring; radiusInner:0.015; radiusOuter:0.03"
+      material="color:yellow; shader:flat; opacity:0.9">
+    </a-cursor>
+  </a-camera>
+</a-entity>
 
-  <!-- LUZ -->
-  <a-light type="ambient" intensity="0.5"></a-light>
-  <a-light type="point" position="0 3 -3" intensity="1"></a-light>
+<!-- LUZ CINEMA -->
+<a-light type="ambient" intensity="0.3"></a-light>
+<a-light type="spot" position="0 4 -3" angle="45" intensity="1"></a-light>
 
-  <!-- CINEMA -->
-  <a-plane rotation="-90 0 0" width="20" height="20" color="#222"></a-plane>
-  <a-plane position="0 4 0" rotation="90 0 0" width="20" height="20" color="#111"></a-plane>
-  <a-plane position="0 2 -10" width="20" height="4" color="#111"></a-plane>
+<!-- CHÃO TEXTURIZADO (FAKE POR CÓDIGO) -->
+<a-plane rotation="-90 0 0" width="30" height="30"
+ material="color:#222; roughness:0.9"></a-plane>
 
-  <!-- TELA -->
-  <a-video id="screen"
-    src="#video"
-    position="0 2.3 -9.8"
-    width="9"
-    height="5"
-    material="shader:flat">
-  </a-video>
+<!-- PAREDES -->
+<a-plane position="0 3 -12" width="30" height="6" color="#111"></a-plane>
+<a-plane position="-15 3 0" rotation="0 90 0" width="30" height="6" color="#111"></a-plane>
+<a-plane position="15 3 0" rotation="0 -90 0" width="30" height="6" color="#111"></a-plane>
+<a-plane position="0 6 0" rotation="90 0 0" width="30" height="30" color="#080808"></a-plane>
 
-  <!-- LISTA -->
-  <a-entity id="lista" position="6 3 -6"></a-entity>
+<!-- CADEIRAS (GERADAS POR CÓDIGO) -->
+<a-entity id="cadeiras"></a-entity>
 
-  <!-- SCROLL -->
-  <a-box id="up" position="6 3.8 -6" width="0.6" height="0.3" depth="0.2" color="#555"></a-box>
-  <a-text value="▲" position="6 3.8 -5.8" align="center"></a-text>
+<!-- TELA -->
+<a-video id="screen"
+ src="#video"
+ position="0 2.8 -11.8"
+ width="10"
+ height="5.6"
+ material="shader:flat">
+</a-video>
 
-  <a-box id="down" position="6 0.2 -6" width="0.6" height="0.3" depth="0.2" color="#555"></a-box>
-  <a-text value="▼" position="6 0.2 -5.8" align="center"></a-text>
+<!-- CONTROLES -->
+<a-box id="pause" position="-1.5 1 -6" width="0.7" height="0.4" depth="0.2" color="#0066ff"></a-box>
+<a-text value="⏯" position="-1.5 1 -5.8" align="center"></a-text>
+
+<a-box id="close" position="1.5 1 -6" width="0.7" height="0.4" depth="0.2" color="#aa0000"></a-box>
+<a-text value="❌" position="1.5 1 -5.8" align="center"></a-text>
+
+<!-- LISTA -->
+<a-entity id="lista" position="8 4 -6"></a-entity>
 
 </a-scene>
 
 <script>
-let root=null, offset=0;
+let root=null, offset=0, currentFile="";
 const video=document.getElementById("video");
 const lista=document.getElementById("lista");
 
-document.getElementById("pick").onclick=async()=>{
+/* TELA 2D */
+pick.onclick=async()=>{
   root=await window.showDirectoryPicker();
-  document.getElementById("startVR").disabled=false;
+  startVR.disabled=false;
 };
 
-document.getElementById("startVR").onclick=()=>{
-  document.getElementById("tela2d").style.display="none";
+startVR.onclick=()=>{
+  tela2d.style.display="none";
   document.querySelector("a-scene").enterVR();
+  criarCadeiras();
   carregar();
 };
 
+/* CADEIRAS */
+function criarCadeiras(){
+  const c=document.getElementById("cadeiras");
+  for(let z=0;z<4;z++){
+    for(let x=-3;x<=3;x++){
+      const seat=document.createElement("a-box");
+      seat.setAttribute("position",`${x*1.2} 0.5 ${-4-z*1.5}`);
+      seat.setAttribute("width","0.9");
+      seat.setAttribute("height","0.9");
+      seat.setAttribute("depth","0.9");
+      seat.setAttribute("color","#111");
+      c.appendChild(seat);
+    }
+  }
+}
+
+/* CARREGAR FILMES */
 async function carregar(){
-  lista.innerHTML="";
-  offset=0;
+  lista.innerHTML=""; offset=0;
   for await (const d of root.values()){
     if(d.kind==="directory" && d.name==="Filmes"){
       for await (const f of d.values()){
         if(f.kind==="file" && f.name.match(/\.(mp4|webm)$/)){
           const url=URL.createObjectURL(await f.getFile());
-          criarItem(f.name, url);
+          criarItem(f.name,url);
         }
       }
     }
   }
 }
 
-function criarItem(nome, url){
+/* ITEM COM GAZE */
+function criarItem(nome,url){
   const b=document.createElement("a-plane");
   b.setAttribute("width","3");
-  b.setAttribute("height","0.4");
-  b.setAttribute("color","#333");
+  b.setAttribute("height","0.45");
+  b.setAttribute("color","#222");
   b.setAttribute("position",`0 ${-offset} 0`);
 
-  let timer=null;
+  let tmr=null;
 
   b.addEventListener("mouseenter",()=>{
-    b.setAttribute("color","#666");
-    timer=setTimeout(()=>{
-      video.src=url;
-      video.play();
+    b.setAttribute("color","#555");
+    tmr=setTimeout(()=>{
+      abrirFilme(nome,url);
     },1200);
   });
 
   b.addEventListener("mouseleave",()=>{
-    b.setAttribute("color","#333");
-    clearTimeout(timer);
+    b.setAttribute("color","#222");
+    clearTimeout(tmr);
   });
 
   const t=document.createElement("a-text");
   t.setAttribute("value",nome);
-  t.setAttribute("align","left");
   t.setAttribute("width","3");
+  t.setAttribute("align","left");
   t.setAttribute("position","-1.45 0 0.01");
 
   b.appendChild(t);
   lista.appendChild(b);
-  offset+=0.45;
+  offset+=0.5;
 }
 
-/* SCROLL */
-document.getElementById("up").addEventListener("mouseenter",()=>{
-  lista.object3D.position.y+=0.5;
+/* ABRIR FILME */
+function abrirFilme(nome,url){
+  currentFile=nome;
+  video.src=url;
+  video.currentTime=parseFloat(localStorage.getItem(nome))||0;
+  video.play();
+}
+
+/* SALVAR POSIÇÃO */
+video.ontimeupdate=()=>{
+  if(currentFile){
+    localStorage.setItem(currentFile,video.currentTime);
+  }
+};
+
+/* CONTROLES */
+pause.addEventListener("mouseenter",()=>{
+  setTimeout(()=>{
+    video.paused?video.play():video.pause();
+  },1200);
 });
-document.getElementById("down").addEventListener("mouseenter",()=>{
-  lista.object3D.position.y-=0.5;
+
+close.addEventListener("mouseenter",()=>{
+  setTimeout(()=>{
+    video.pause();
+    video.src="";
+    currentFile="";
+  },1200);
 });
 </script>
 
