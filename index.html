@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<title>DuckFlix VR</title>
+<script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+<style>
+body {
+  margin: 0;
+  background: #000;
+  color: white;
+  font-family: Arial;
+}
+
+/* TELA 2D */
+#startScreen {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(#000, #111);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+button {
+  padding: 15px 30px;
+  margin: 10px;
+  font-size: 18px;
+  border-radius: 10px;
+  border: none;
+  background: #0077ff;
+  color: white;
+}
+</style>
+</head>
+
+<body>
+
+<!-- TELA 2D INICIAL -->
+<div id="startScreen">
+  <h1>🦆 DuckFlix VR</h1>
+  <p>Escolha sua biblioteca de filmes</p>
+  <button id="pickFolder">📂 Escolher Pasta</button>
+  <button id="enterVR" disabled>🕶️ Entrar no VR</button>
+</div>
+
+<!-- VIDEO -->
+<video id="video" crossorigin="anonymous" playsinline></video>
+
+<!-- CENA VR -->
+<a-scene vr-mode-ui="enabled: true" embedded>
+
+  <!-- CAMERA -->
+  <a-entity position="0 1.6 0">
+    <a-camera>
+      <a-cursor fuse="true" fuse-timeout="1000"
+        material="color: yellow">
+      </a-cursor>
+    </a-camera>
+  </a-entity>
+
+  <!-- LUZ -->
+  <a-light type="ambient" intensity="0.9"></a-light>
+
+  <!-- SALA -->
+  <a-box position="0 1 -4" depth="0.1" height="2.2" width="4.5" color="#111"></a-box>
+  <a-box position="0 0 -4" depth="8" height="0.1" width="8" color="#222"></a-box>
+
+  <!-- TELA -->
+  <a-video id="screen" src="#video"
+    position="0 1.6 -3.9"
+    width="4"
+    height="2.25">
+  </a-video>
+
+</a-scene>
+
+<script>
+let rootDir = null;
+const pickBtn = document.getElementById("pickFolder");
+const vrBtn = document.getElementById("enterVR");
+const startScreen = document.getElementById("startScreen");
+const video = document.getElementById("video");
+const screen = document.getElementById("screen");
+
+// -------- ESCOLHER PASTA (2D) --------
+pickBtn.onclick = async () => {
+  if (!window.showDirectoryPicker) {
+    alert("Seu navegador não suporta acesso a pastas.");
+    return;
+  }
+
+  rootDir = await window.showDirectoryPicker();
+  alert("Pasta carregada com sucesso!");
+  vrBtn.disabled = false;
+};
+
+// -------- ENTRAR NO VR --------
+vrBtn.onclick = async () => {
+  startScreen.style.display = "none";
+
+  const scene = document.querySelector("a-scene");
+  if (scene.enterVR) scene.enterVR();
+
+  // Carregar automaticamente filmes
+  for await (const entry of rootDir.values()) {
+    if (entry.kind === "directory" && entry.name === "Filmes") {
+      for await (const file of entry.values()) {
+        if (file.kind === "file") {
+          const blob = await file.getFile();
+          video.src = URL.createObjectURL(blob);
+          video.play();
+          break;
+        }
+      }
+    }
+  }
+};
+</script>
+
+</body>
+</html>
