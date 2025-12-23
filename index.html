@@ -4,16 +4,56 @@
 <meta charset="utf-8">
 <title>DuckFlix VR Cinema</title>
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+
 <style>
-body { margin: 0; background: black; }
+body {
+  margin: 0;
+  background: black;
+  color: white;
+  font-family: Arial;
+}
+
+/* ===== TELA 2D ===== */
+#start2d {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(#111, #000);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 10;
+}
+
+button {
+  padding: 15px 30px;
+  margin: 10px;
+  font-size: 18px;
+  border-radius: 10px;
+  border: none;
+  background: #0077ff;
+  color: white;
+}
+button:disabled {
+  background: #333;
+}
 </style>
 </head>
 
 <body>
 
+<!-- ===== TELA 2D ===== -->
+<div id="start2d">
+  <h1>🦆 DuckFlix VR</h1>
+  <p>Escolha sua pasta de filmes</p>
+  <button id="pickFolder">📂 Escolher Pasta</button>
+  <button id="enterVR" disabled>🕶️ Entrar no Cinema VR</button>
+</div>
+
 <!-- VIDEO -->
 <video id="video" crossorigin="anonymous" playsinline></video>
 
+<!-- ===== CENA VR ===== -->
 <a-scene vr-mode-ui="enabled: true">
 
   <!-- CAMERA + OLHAR -->
@@ -32,80 +72,131 @@ body { margin: 0; background: black; }
   <a-light type="point" intensity="1" position="0 3 -2"></a-light>
 
   <!-- CINEMA REAL -->
-  <!-- CHÃO -->
-  <a-plane rotation="-90 0 0" width="12" height="12" color="#222"></a-plane>
+  <a-plane rotation="-90 0 0" width="14" height="14" color="#222"></a-plane>
+  <a-plane position="0 4 0" rotation="90 0 0" width="14" height="14" color="#111"></a-plane>
+  <a-plane position="0 2 -7" width="14" height="4" color="#111"></a-plane>
+  <a-plane position="-7 2 0" rotation="0 90 0" width="14" height="4" color="#111"></a-plane>
+  <a-plane position="7 2 0" rotation="0 -90 0" width="14" height="4" color="#111"></a-plane>
 
-  <!-- TETO -->
-  <a-plane position="0 4 0" rotation="90 0 0" width="12" height="12" color="#111"></a-plane>
-
-  <!-- PAREDES -->
-  <a-plane position="0 2 -6" width="12" height="4" color="#111"></a-plane>
-  <a-plane position="-6 2 0" rotation="0 90 0" width="12" height="4" color="#111"></a-plane>
-  <a-plane position="6 2 0" rotation="0 -90 0" width="12" height="4" color="#111"></a-plane>
-
-  <!-- TELA DE CINEMA -->
+  <!-- TELA -->
   <a-video id="screen"
     src="#video"
-    position="0 2 -5.9"
-    width="6.5"
-    height="3.6"
+    position="0 2 -6.9"
+    width="7"
+    height="3.9"
     material="shader: flat">
   </a-video>
 
-  <!-- PAINEL LATERAL DE LISTA -->
-  <a-entity id="lista" position="4 2 -3"></a-entity>
+  <!-- LISTA LATERAL -->
+  <a-entity id="lista" position="4.5 2.5 -4"></a-entity>
 
 </a-scene>
 
 <script>
+let rootDir = null;
+const pickBtn = document.getElementById("pickFolder");
+const enterBtn = document.getElementById("enterVR");
+const start2d = document.getElementById("start2d");
+
 const video = document.getElementById("video");
 const screen = document.getElementById("screen");
 const lista = document.getElementById("lista");
 
-// DEMO (depois liga com pasta)
-const filmes = [
-  { nome: "🎬 Filme Local", tipo: "local", url: "demo.mp4" },
-  { nome: "▶ Matrix Trailer", tipo: "yt", url: "https://www.youtube.com/watch?v=vKQi3bBA1y8" },
-  { nome: "▶ Vingadores", tipo: "yt", url: "https://youtu.be/eOrNdBpGMv8" }
-];
+let yOffset = 0;
 
-let y = 0;
+// ===== ESCOLHER PASTA (2D) =====
+pickBtn.onclick = async () => {
+  if (!window.showDirectoryPicker) {
+    alert("Seu navegador não suporta acesso a pastas.");
+    return;
+  }
 
-// CRIAR BOTÕES DA LISTA
-filmes.forEach(item => {
-  const botao = document.createElement("a-plane");
-  botao.setAttribute("width", "2.8");
-  botao.setAttribute("height", "0.35");
-  botao.setAttribute("color", "#333");
-  botao.setAttribute("position", `0 ${-y} 0`);
-  botao.setAttribute("class", "clickable");
+  rootDir = await window.showDirectoryPicker();
+  enterBtn.disabled = false;
+  alert("Pasta carregada!");
+};
 
-  botao.addEventListener("click", () => {
-    if (item.tipo === "yt") abrirYT(item.url);
-    else tocarLocal(item.url);
-  });
+// ===== ENTRAR NO VR =====
+enterBtn.onclick = async () => {
+  start2d.style.display = "none";
 
-  const texto = document.createElement("a-text");
-  texto.setAttribute("value", item.nome);
-  texto.setAttribute("align", "left");
-  texto.setAttribute("color", "white");
-  texto.setAttribute("width", "3");
-  texto.setAttribute("position", "-1.3 0 0.01");
+  const scene = document.querySelector("a-scene");
+  if (scene.enterVR) scene.enterVR();
 
-  botao.appendChild(texto);
-  lista.appendChild(botao);
+  await carregarBiblioteca();
+};
 
-  y += 0.45;
-});
+// ===== CARREGAR FILMES E YOUTUBE =====
+async function carregarBiblioteca() {
+  lista.innerHTML = "";
+  yOffset = 0;
 
-function tocarLocal(url) {
+  for await (const entry of rootDir.values()) {
+    if (entry.kind === "directory") {
+      if (entry.name === "Filmes") carregarFilmes(entry);
+      if (entry.name === "YouTube Links") carregarYT(entry);
+    }
+  }
+}
+
+// ----- FILMES LOCAIS -----
+async function carregarFilmes(dir) {
+  for await (const file of dir.values()) {
+    if (file.kind === "file") {
+      const blob = await file.getFile();
+      const url = URL.createObjectURL(blob);
+      criarItem("🎬 " + file.name, () => tocarVideo(url));
+    }
+  }
+}
+
+function tocarVideo(url) {
   video.src = url;
   video.play();
+}
+
+// ----- YOUTUBE TXT -----
+async function carregarYT(dir) {
+  for await (const file of dir.values()) {
+    if (file.kind === "file" && file.name.endsWith(".txt")) {
+      const f = await file.getFile();
+      const linhas = (await f.text()).split("\n");
+
+      for (let linha of linhas) {
+        let [nome, link] = linha.split("|");
+        if (link) {
+          criarItem("▶ " + nome, () => abrirYT(link.trim()));
+        }
+      }
+    }
+  }
 }
 
 function abrirYT(link) {
   const embed = link.replace("watch?v=", "embed/");
   screen.setAttribute("src", embed);
+}
+
+// ===== ITEM DA LISTA (OLHAR) =====
+function criarItem(texto, acao) {
+  const btn = document.createElement("a-plane");
+  btn.setAttribute("width", "3");
+  btn.setAttribute("height", "0.4");
+  btn.setAttribute("color", "#333");
+  btn.setAttribute("position", `0 ${-yOffset} 0`);
+
+  btn.addEventListener("click", acao);
+
+  const txt = document.createElement("a-text");
+  txt.setAttribute("value", texto);
+  txt.setAttribute("align", "left");
+  txt.setAttribute("color", "white");
+  txt.setAttribute("width", "3");
+  txt.setAttribute("position", "-1.45 0 0.01");
+
+  btn.appendChild(txt);
+  lista.appendChild(btn);
+  yOffset += 0.45;
 }
 </script>
 
